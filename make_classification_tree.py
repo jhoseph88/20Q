@@ -3,182 +3,141 @@ from extensions import db
 import pdb
 
 class QNode:
-	'A question differentiating two animals and pointers to two child animals'
-	def __init__(self, q=None, animal=None, leftchild=None, rightchild=None):
-		self.question = q
+	"""A question differentiating two animals and two child questions"""
+	def __init__(self, data=None, leftchild=None, rightchild=None):
 		# leaf nodes will have animal attribute
-		self.animal = animal
-		self.left_QNode = None
-		self.right_QNode = None
+		self.data = data
+		self.left_QNode = leftchild
+		self.right_QNode = rightchild
 
 	def ask_question(self):
-		'Returns \'y\' or \'n\' depending on user\'s answer to question.'
-		if self.question:
-			return raw_input(self.question)[0:1].lower()
+		"""Returns \'y\' or \'n\' depending on user\'s answer to question."""
+		if self.data:
+			return raw_input(self.data + ' ')[0:1].lower()
 		else:
 			return None
 
-	def set_question(self, q):
-		'Sets classifier question for an animal.'
-		cur = db.cursor()
-		sql_cmd = 'UPDATE Tree SET question=\'' + q + '\' WHERE animal=' +\
-				  '\'' + self.animal + '\''
-		self.question = q
+	def get_data(self):
+		"""Returns string of data for a given QNode."""
+		return self.data
 
-	def set_left_child(self, new_node):
-		'Sets a new node as the left child of a given QNode.'
-		# Insert new animal into Tree as a leaf node.
-		cur = db.cursor()
-		sql_cmd = 'INSERT INTO Tree VALUES (\'' + new_node + '\', NULL, NULL)'
-		cur.execute(sql_cmd)
-		# Make left child of current node new node just created and inserted.
-		sql_cmd = 'UPDATE Tree SET leftchild=\'' + new_node+ ' WHERE animal=' +\
-				  '\'' + self.animal + '\''
-		cur.execute(sql_cmd)
-		# Set the current node's left child in memory.
-		self.left_QNode = new_node
-
-	def set_right_child(self, new_node):
-		'Sets a new node as the right child of a given QNode.'
-		# Insert new animal into Tree as a leaf node.
-		cur = db.cursor()
-		sql_cmd = 'INSERT INTO Tree VALUES (\'' + new_node + '\', NULL, NULL)'
-		cur.execute(sql_cmd)
-		# Make right child of current node new node just created and inserted.
-		sql_cmd = 'UPDATE Tree SET rightchild=\'' + new_node+' WHERE animal=' +\
-				  '\'' + self.animal + '\''
-		cur.execute(sql_cmd)
-		# Set the current node's left child in memory.
-		self.right_QNode = new_node
+	def is_leaf_node(self):
+		"""Returns boolean indicating whether a given QNode is a leaf node (' +\
+		'has no children)."""
+		return self.left_QNode == None and self.right_QNode == None
 
 	def get_left_child(self):
-		'Returns left child of a given QNode.'
 		return self.left_QNode
 
 	def get_right_child(self):
-		'Returns right child of a given QNode.'
 		return self.right_QNode
 
-	def get_animal(self):
-		'Returns string of animal for a given QNode.'
-		return self.animal
-
-	def is_leaf_node(self):
-		'Returns boolean indicating whether a given QNode is a leaf node (' + \
-		'has no children).'
-		return self.left_QNode == None and self.right_QNode == None
-
-def load_tree_preorder(current_animal):
-	'Uses a preorder tree traversal to build out the phylogenetic tree from ' +\
-	'the database.'
-	if current_animal == None:
+def load_tree_preorder(current_data):
+	"""Uses a preorder tree traversal to build out the phylogenetic tree ' +\
+	'from the database."""
+	if current_data == None:
 		return
 	cur = db.cursor()
-	sql_cmd = 'SELECT * FROM Tree WHERE animal = \'' + current_animal + '\''
+	sql_cmd = 'SELECT * FROM Tree WHERE data = \'' + current_data + '\''
 	cur.execute(sql_cmd)
-	result = cur.fetchall()[0]
-	question = result['question']
-	leftchild_animal = result['leftchild']
-	rightchild_animal = result['rightchild']
+	result = cur.fetchall()
+	# If called when tree is empty, just return (for starting condition)
+	if len(result) == 0:
+		return
+	else:
+		result = result[0]
+	question = result['data']
+	lchild = result['leftchild']
+	rchild = result['rightchild']
 	# Create new node from data retrieved on current_animal from the database
-	current_node = QNode(q=question, animal=current_animal, 
-					   	 leftchild=leftchild_animal, 
-					   	 rightchild=rightchild_animal)
-	current_node.left_QNode = load_tree_preorder(leftchild_animal)
-	current_node.right_QNode = load_tree_preorder(rightchild_animal)
+	current_node = QNode(data=current_data, leftchild=lchild, rightchild=rchild)
+	current_node.left_QNode = load_tree_preorder(lchild)
+	current_node.right_QNode = load_tree_preorder(rchild)
 	return current_node
 
-def add_animal_to_db(animal, question, is_root, is_right_child, parent):
-	'Adds animal to database as a leaf node (a node with no children).'
-	cur = db.cursor()
-	sql_cmd = 'SELECT * FROM Tree WHERE animal = ' + '\'' + animal + '\''
-	cur.execute(sql_cmd)
-	# Insert animal into the database if it doesn't already exist
-	if len(cur.fetchall() ) == 0:
-		# Insert NULL into the database if the 
-		if question == None:
-			sql_cmd = 'INSERT INTO Tree VALUES (\'' + animal + '\', NULL,' + \
-			  	  	  'NULL, NULL)'
-		else:
-			sql_cmd = 'INSERT INTO Tree VALUES (\'' + animal + '\', \'' + \
-					  question + '\', NULL, NULL)'
-		cur.execute(sql_cmd)
-		# If answer to classifier question was yes, add animal as right child
-		# of parent. If answer was no, add animal as left child of parent.
-		child_position = 'leftchild'
-		if is_right_child:
-			child_position = 'rightchild'
-		# Don't add to parent if root.
-		if not is_root:
-			sql_cmd = 'UPDATE Tree SET ' + child_position + '=\'' + animal + \
-			  	  	'\' WHERE animal=' + '\'' + parent + '\''
-			cur.execute(sql_cmd)
+def ask_if_play_again():
+	"""Ask user if (s)he wants to play again"""
+	play_again = raw_input('Want to play again? ' )[0:1].lower()
+	# Load the updated database if user wants to play again
+	if play_again == 'y':
+		print('Okay. I\'m going to restart the game now...')
+		play_game()
 	else:
-		print('Animal with name ' + animal + ' already exists in database. ' +
+		print('Fair enough. I hope to play again with you soon! ' +
 			  'Exiting...')
-		exit(1)
+		exit
 
-def build_tree(root):
-	'Builds classification tree so loops infinitely until receives SIGINT'
-	# Save root for future calls
-	global_root = root
-	current_node = root
+def add_animal_to_db():
+	#FIXME: figure out how to add new QUESTION as child of parent question
+	"""Adds animal to database as a leaf node (a node with no children)."""
+	new_animal = raw_input('Okay. I give up ... What was it (Please DO NOT use ' +
+						   'any articles in the name of your animal.)? ').lower()
+	classifier_question = raw_input('I see ... Well then what yes or no ' +
+								    'question would distinguish a ' + 
+									new_animal + ' from another animal? ')
+	classifier_answer = raw_input('And what would the answer to that question' +
+								  ' be if you were ' + 'thinking of a ' + 
+								  new_animal + '? ')[0:1].lower()
+	# Add to left of current if answer to question is false; right if true
+	is_right_child = False
+	if classifier_answer == 'y':
+		is_right_child = True
+	cur = db.cursor()
+	# Add classifier question to the database
+	sql_cmd = 'INSERT INTO Tree (data, leftchild, rightchild) VALUES (\'' + \
+			  classifier_question + '\',' + ' NULL, NULL)'
+	cur.execute(sql_cmd)
+	# Insert new animal into tree as a leaf node
+	sql_cmd = 'INSERT INTO Tree (data, leftchild, rightchild) VALUES (\'' + \
+			  new_animal + '\', NULL, NULL)'
+	cur.execute(sql_cmd)
+	# If answer to classifier question was yes, add animal as right child
+	# of question. If answer was no, add animal as left child of question..
+	child_position = 'leftchild'
+	pdb.set_trace()
+	if is_right_child:
+		child_position = 'rightchild'
+	sql_cmd = 'UPDATE Tree SET ' + child_position + '=\'' + new_animal + \
+		  	  '\' WHERE data=' + '\'' + classifier_question + '\''
+	cur.execute(sql_cmd)
+	ask_if_play_again()
+
+def play_game():
+	"""Builds classification tree so loops infinitely until receives SIGINT"""
+	# Generate tree using root question for root node of tree
+	root_question = 'Does it have wings?'
+	current_node = load_tree_preorder(root_question)
 	while True:
+		# If no value in tree for current_node, must add a question to the tree
+		# and the user's animal as a child node of that question. Then restart.
+		if current_node == None:
+			add_animal_to_db()
+			play_game()
 		# If node is a leaf node, make a guess.
 		if current_node.is_leaf_node():
-			guess_veracity = raw_input('Is it a ' + current_node.get_animal() +\
+			guess_veracity = raw_input('Is it a ' + current_node.get_data() +\
 									   '? ')[0:1].lower()
 			# If guess was correct, celebrate
 			if guess_veracity == 'y':
 				print('Fuck yes! I got it!')
 				# Ask if user wants to play again
 				play_again = raw_input('Want to play again? ')[0:1].lower()
-
+				# If answer is yes, rebuild tree to update it and restart game
 				if play_again == 'y':
 					print('Okay. I\'m going to restart the game now...')
-					build_tree(global_root)
+					play_game()
 				else:
 					print('Fair enough. I hope to play again with you soon! ' +
 						  'Exiting...')
 					exit(0)
-
 			# Otherwise, add a new node to tree based on user input
 			else:
-				new_animal = raw_input('Okay. I give up ... What was it ' +
-									   '(Please DO NOT use any articles in ' +
-									   'the name of your animal.)? ').lower()
-				classifier_question = raw_input('I see ... Well then what ' +
-											'yes or no question would ' +
-											'distinguish a ' + new_animal + 
-											' from another animal? ' ) + ' '
-				classifier_answer = raw_input('And what would the answer to ' +
-										  	  'that question be if you were ' +
-										 	  'thinking of a ' + new_animal + 
-										 	  '? ')[0:1].lower()
-				# Set the question of the current node to differentiate the new
-				# new node from it.
-				current_node.set_question(classifier_question)
-				# Add to left of current if answer to classifier question is
-				# false; right if true
-				is_right_child = False
-				if classifier_answer == 'y':
-					is_right_child = True
-				# Add the new animal as a leaf node
-				add_animal_to_db(new_animal, classifier_question, False, 
-								 is_right_child, current_node.animal)
-				# Update database and exit 
-				print('Okay, well I\'m gonna go update the classifier tree ' +
-					  'now so I don\'t have to embarrass myself like I ' +
-					  'just did with you...')
+				# Add new question and new animal as a child of that question
+				add_animal_to_db()
+				# Ask user if (s)he wants to play again
 				play_again = raw_input('Want to play again? ' )[0:1].lower()
-				# Load the updated database if user wants to play again.
-				if play_again == 'y':
-					print('Okay. I\'m going to restart the game now...')
-					build_tree(load_tree_preorder(global_root.animal) )
-				else:
-					print('Fair enough. I hope to play again with you soon! ' +
-						  'Exiting...')
-					exit(0)
+				# Load the updated database if user wants to play again
+				ask_if_play_again()
 		question_answer = current_node.ask_question()
 		# Traverse right if answer is yes; left if answer is no
 		if question_answer == 'y':
@@ -187,17 +146,5 @@ def build_tree(root):
 			current_node = current_node.get_left_child()
 
 if __name__ == '__main__':
-	initial_question = 'Does it have legs? '
-	initial_animal = 'bird'
-	is_root = True
-	is_right_child = False
-	# Add bird as root node of tree, so pass in None for parent.
-	cur = db.cursor()
-	sql_cmd = 'SELECT * FROM Tree WHERE animal = \'bird\''
-	cur.execute(sql_cmd)
-	results = cur.fetchall()
-	if len(results) == 0:
-		add_animal_to_db(initial_animal, initial_question,
-						 is_root, is_right_child, None)
-	root = load_tree_preorder(initial_animal)
-	build_tree(root)
+	# Start game
+	play_game()

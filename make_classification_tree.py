@@ -57,7 +57,7 @@ def load_tree_preorder(current_data):
 	current_node.right_QNode = load_tree_preorder(rchild)
 	return current_node
 
-def add_animal_to_db(prev_question):
+def add_animal_to_db(prev_question, child_pos):
 	"""Adds animal to database as a leaf node (a node with no children)."""
 	new_animal = raw_input('Okay. I give up ... What was it (Please DO NOT use ' +
 						   'any articles in the name of your animal.)? ').lower()
@@ -88,18 +88,18 @@ def add_animal_to_db(prev_question):
 	sql_cmd = 'UPDATE Tree SET ' + child_position + '=\'' + new_animal + \
 		  	  '\' WHERE data=' + '\'' + classifier_question + '\''
 	cur.execute(sql_cmd)
-	# Set new question as left child of previous question
-	sql_cmd = 'UPDATE Tree SET leftchild =\'' + classifier_question + \
+	# Set new question as left/right child of prev question based on child_post
+	sql_cmd = 'UPDATE Tree SET ' + child_pos + ' =\'' + classifier_question + \
 		  	  '\' WHERE data=' + '\'' + prev_question + '\''
 	cur.execute(sql_cmd)
+
 	"""Ask user if (s)he wants to play again"""
 	play_again = raw_input('Want to play again? ' )[0:1].lower()
 	# Load the updated database if user wants to play again
 	if play_again == 'y':
 		print('Okay. I\'m going to restart the game now...')
 	else:
-		print('Fair enough. I hope to play again with you soon! ' +
-			  'Exiting...')
+		print('Fair enough. I hope to play again with you soon! Exiting...')
 		exit(0)
 	return classifier_question
 
@@ -111,11 +111,12 @@ def play_game():
 	# Previous question will be stored and updated for tree building. When a new
 	# question is added, it must be appended as a child of its parent question
 	prev_question = ''
+	child_position = 'leftchild'
 	while True:
 		# If no value in tree for current_node, must add a question to the tree
 		# and the user's animal as a child node of that question. Then, restart.
 		if current_node == None:
-			prev_question = add_animal_to_db(prev_question)
+			prev_question = add_animal_to_db(prev_question, child_position)
 			current_node = load_tree_preorder(root_question)
 			continue
 		# If node is a leaf node, make a guess.
@@ -139,15 +140,19 @@ def play_game():
 			# Otherwise, add a new node to tree based on user input
 			else:
 				# Add new question and new animal as a child of that question
-				prev_question = add_animal_to_db(prev_question)
+				prev_question = add_animal_to_db(prev_question, child_position)
 				current_node = load_tree_preorder(root_question)
 				continue
 		question_answer = current_node.ask_question()
-		# Traverse right if answer is yes; left if answer is no
+		# Traverse right if answer is yes; left if answer is no. Must save the
+		# direction traversed to decide whether new question node should be 
+		# added as a left child or as a right child of its parent question node.
 		if question_answer == 'y':
 			current_node = current_node.get_right_child()
+			child_position = 'rightchild'
 		else:
 			current_node = current_node.get_left_child()
+			child_position = 'leftchild'
 
 if __name__ == '__main__':
 	# Start game

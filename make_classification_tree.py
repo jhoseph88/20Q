@@ -97,20 +97,24 @@ def add_animal_to_db(prev_question, child_pos, guess_animal):
 	if guess_animal != None:
 		guess_pos = ''
 		if classifier_answer == 'y':
-			guess_pos = 'leftchild' 
+			guess_pos = 'leftchild'
 		else:
 			guess_pos = 'rightchild'
+			# Add question as child of guess animal if wrong guess.
+			sql_cmd = 'UPDATE Tree SET leftchild=\'' + classifier_question + \
+		  	  	  '\' WHERE data=' + '\'' + guess_animal + '\''
 		sql_cmd = 'UPDATE Tree SET ' + guess_pos + ' =\'' + guess_animal + \
-		  	  	'\' WHERE data=' + '\'' + classifier_question + '\''
+		  	  	  '\' WHERE data=' + '\'' + classifier_question + '\''
 		cur.execute(sql_cmd)
 	#Ask user if (s)he wants to play again 
 	play_again = raw_input('Want to play again? ' )[0:1].lower()
 	# Load the updated database if user wants to play again
 	if play_again == 'y':
 		print('Okay. I\'m going to restart the game now...')
+	# Return -1 to indicate user selected to exit
 	else:
 		print('Fair enough. I hope to play again with you soon! Exiting...')
-		exit(0)
+		return -1
 	return classifier_question
 
 def play_game():
@@ -126,7 +130,11 @@ def play_game():
 		# If no value in tree for current_node, must add a question to the tree
 		# and the user's animal as a child node of that question. Then, restart.
 		if current_node == None:
-			prev_question = add_animal_to_db(prev_question, child_position, current_node)
+			prev_question = add_animal_to_db(prev_question, child_position, 
+											 current_node)
+			# User selected 'n' for exit
+			if prev_question == -1:
+				exit(0)
 			current_node = load_tree_preorder(root_question)
 			continue
 		# If node is a leaf node, make a guess.
@@ -155,9 +163,14 @@ def play_game():
 				# question.
 				prev_question = add_animal_to_db(prev_question, child_position, 
 												 current_node.get_data() )
+				# User selected 'n' for exit
+				if prev_question == -1:
+					exit(0)
 				current_node = load_tree_preorder(root_question)
 				continue
 		question_answer = current_node.ask_question()
+		# set previous question to question being asked right now
+		prev_question = current_node.get_data()
 		# Traverse right if answer is yes; left if answer is no. Must save the
 		# direction traversed to decide whether new question node should be 
 		# added as a left child or as a right child of its parent question node.
